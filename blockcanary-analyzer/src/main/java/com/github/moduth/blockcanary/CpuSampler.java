@@ -15,6 +15,7 @@
  */
 package com.github.moduth.blockcanary;
 
+import android.os.Build;
 import android.util.Log;
 
 import com.github.moduth.blockcanary.internal.BlockInfo;
@@ -48,10 +49,14 @@ class CpuSampler extends AbstractSampler {
     private long mIoWaitLast = 0;
     private long mTotalLast = 0;
     private long mAppCpuTimeLast = 0;
+    private boolean mAboveAndroidO = false;
 
     public CpuSampler(long sampleInterval) {
         super(sampleInterval);
         BUSY_TIME = (int) (mSampleInterval * 1.2f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mAboveAndroidO = true;
+        }
     }
 
     @Override
@@ -101,9 +106,19 @@ class CpuSampler extends AbstractSampler {
 
     @Override
     protected void doSample() {
+        if (mAboveAndroidO) {
+            getCPUDataForO();
+        } else {
+            getCPUData();
+        }
+    }
+
+    private void getCPUDataForO() {
+    }
+
+    private void getCPUData() {
         BufferedReader cpuReader = null;
         BufferedReader pidReader = null;
-
         try {
             cpuReader = new BufferedReader(new InputStreamReader(
                     new FileInputStream("/proc/stat")), BUFFER_SIZE);
@@ -212,4 +227,6 @@ class CpuSampler extends AbstractSampler {
 
         mAppCpuTimeLast = appCpuTime;
     }
+
+
 }

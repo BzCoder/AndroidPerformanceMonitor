@@ -15,11 +15,13 @@
  */
 package com.example.blockcanary;
 
+import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.util.Log;
 
 import com.github.moduth.blockcanary.BlockCanaryContext;
+import com.github.moduth.blockcanary.internal.BlockInfo;
 
 import java.util.List;
 
@@ -76,6 +78,11 @@ public class AppContext extends BlockCanaryContext {
         List<String> list = super.provideWhiteList();
         list.add("com.whitelist");
         return list;
+    }
+
+    @Override
+    public void onBlock(Context context, BlockInfo blockInfo) {
+        Log.e("blockInfo", blockInfo.toString());
     }
 
     @Override
