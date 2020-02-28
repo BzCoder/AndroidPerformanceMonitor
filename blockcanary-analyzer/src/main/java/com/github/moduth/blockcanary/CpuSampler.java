@@ -16,6 +16,8 @@
 package com.github.moduth.blockcanary;
 
 import android.os.Build;
+import android.os.Process;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.github.moduth.blockcanary.internal.BlockInfo;
@@ -39,7 +41,7 @@ class CpuSampler extends AbstractSampler {
      * TODO: Explain how we define cpu busy in README
      */
     private final int BUSY_TIME;
-    private static final int MAX_ENTRY_COUNT = 10;
+    private static final int MAX_ENTRY_COUNT = BlockCanaryInternals.getContext().reportRecentOneMessage() ? 1 : 10;
 
     private final LinkedHashMap<Long, String> mCpuInfoEntries = new LinkedHashMap<>();
     private int mPid = 0;
@@ -113,8 +115,80 @@ class CpuSampler extends AbstractSampler {
         }
     }
 
+    /**
+     *   Android above O(26) can only get app rate
+     */
     private void getCPUDataForO() {
+        java.lang.Process process = null;
+        try {
+            process = Runtime.getRuntime().exec("top -n 1");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            int cpuIndex = -1;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (TextUtils.isEmpty(line)) {
+                    continue;
+                }
+
+                int tempIndex = getCPUIndex(line);
+                if (tempIndex != -1) {
+                    cpuIndex = tempIndex;
+                    continue;
+                }
+                if (line.startsWith(String.valueOf(Process.myPid()))) {
+                    if (cpuIndex == -1) {
+                        continue;
+                    }
+                    String[] param = line.split("\\s+");
+
+                    if (param.length <= cpuIndex) {
+                        continue;
+                    }
+                    String cpu = param[cpuIndex];
+                    if (cpu.endsWith("%")) {
+                        cpu = cpu.substring(0, cpu.lastIndexOf("%"));
+                    }
+                    float rate = Float.parseFloat(cpu) / Runtime.getRuntime().availableProcessors();
+
+                    StringBuilder stringBuilder = new StringBuilder();
+
+                    stringBuilder.append(cpu).append("% ");
+
+                    synchronized (mCpuInfoEntries) {
+                        mCpuInfoEntries.put(System.currentTimeMillis(), stringBuilder.toString());
+                        if (mCpuInfoEntries.size() > MAX_ENTRY_COUNT) {
+                            for (Map.Entry<Long, String> entry : mCpuInfoEntries.entrySet()) {
+                                Long key = entry.getKey();
+                                mCpuInfoEntries.remove(key);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
+        }
     }
+
+
+    private int getCPUIndex(String line) {
+        if (line.contains("CPU")) {
+            String[] titles = line.split("\\s+");
+            for (int i = 0; i < titles.length; i++) {
+                if (titles[i].contains("CPU")) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
 
     private void getCPUData() {
         BufferedReader cpuReader = null;
@@ -136,7 +210,6 @@ class CpuSampler extends AbstractSampler {
             if (pidCpuRate == null) {
                 pidCpuRate = "";
             }
-
             parse(cpuRate, pidCpuRate);
         } catch (Throwable throwable) {
             Log.e(TAG, "doSample: ", throwable);
@@ -168,7 +241,6 @@ class CpuSampler extends AbstractSampler {
         if (cpuInfoArray.length < 9) {
             return;
         }
-
         long user = Long.parseLong(cpuInfoArray[2]);
         long nice = Long.parseLong(cpuInfoArray[3]);
         long system = Long.parseLong(cpuInfoArray[4]);
@@ -194,19 +266,21 @@ class CpuSampler extends AbstractSampler {
             long totalTime = total - mTotalLast;
 
             stringBuilder
-                    .append("cpu:")
+                    //.append("cpu: ")
                     .append((totalTime - idleTime) * 100L / totalTime)
                     .append("% ")
-                    .append("app:")
+                    //.append("app: ")
                     .append((appCpuTime - mAppCpuTimeLast) * 100L / totalTime)
                     .append("% ")
-                    .append("[")
-                    .append("user:").append((user - mUserLast) * 100L / totalTime)
+                    //.append("user:")
+                    .append((user - mUserLast) * 100L / totalTime)
                     .append("% ")
-                    .append("system:").append((system - mSystemLast) * 100L / totalTime)
+                    //.append("system:")
+                    .append((system - mSystemLast) * 100L / totalTime)
                     .append("% ")
-                    .append("ioWait:").append((ioWait - mIoWaitLast) * 100L / totalTime)
-                    .append("% ]");
+                    //.append("ioWait:")
+                    .append((ioWait - mIoWaitLast) * 100L / totalTime)
+                    .append("% ");
 
             synchronized (mCpuInfoEntries) {
                 mCpuInfoEntries.put(System.currentTimeMillis(), stringBuilder.toString());

@@ -22,6 +22,7 @@ import android.util.Log;
 
 import com.github.moduth.blockcanary.BlockCanaryContext;
 import com.github.moduth.blockcanary.internal.BlockInfo;
+import com.github.moduth.blockcanary.internal.GetSingleCpuRateInfoUtils;
 
 import java.util.List;
 
@@ -82,11 +83,20 @@ public class AppContext extends BlockCanaryContext {
 
     @Override
     public void onBlock(Context context, BlockInfo blockInfo) {
-        Log.e("blockInfo", blockInfo.toString());
+            Log.e("blockInfo",blockInfo.cpuRateInfo);
+            if(GetSingleCpuRateInfoUtils.getCpu(blockInfo.cpuRateInfo)!=null){
+                Log.e("cpuinfo", GetSingleCpuRateInfoUtils.getCpu(blockInfo.cpuRateInfo).toString());
+            }
+
     }
 
     @Override
     public boolean stopWhenDebugging() {
+        return true;
+    }
+
+    @Override
+    public boolean reportRecentOneMessage() {
         return true;
     }
 }
